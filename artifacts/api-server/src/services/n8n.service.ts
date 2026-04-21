@@ -1,4 +1,4 @@
-const N8N_WEBHOOK_URL = "https://lunexnynn.app.n8n.cloud/webhook/video-process-and-publish";
+const N8N_WEBHOOK_URL = "https://lunexnynn.app.n8n.cloud/webhook-test/video-process-and-publish";
 
 export interface ScheduledPost {
   videoUrl: string;
