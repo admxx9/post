@@ -1,0 +1,131 @@
+# Nex Bot (BotAluguel Pro)
+
+## Overview
+
+**Nex Bot** — App mobile (Expo) que publica vídeos automaticamente no TikTok, Instagram e YouTube via integração com n8n. Front-end React Native, back-end n8n (workflows), com servidor Express na Replit como proxy obrigatório (app → Replit → n8n → Replit → app).
+
+Histórico: o projeto começou como SaaS de bots WhatsApp (BotAluguel Pro) e foi pivotado para auto-postagem de vídeos. O layout, sistema de planos/moedas, autenticação, pagamentos PIX (EFI Bank) e infra de banco foram preservados; apenas o domínio funcional dos cards/Hub/+ mudou.
+
+## Arquitetura de Vídeo (n8n)
+
+- **Endpoint app → Replit**: `POST /api/video/process` (controller: `video.controller.ts`, route: `video.routes.ts`)
+- **Replit → n8n**: `services/n8n.service.ts` repassa para `https://lunexnynn.app.n8n.cloud/webhook/video-process-and-publish`
+- **Proxy IA (descrição)**: `POST /api/proxy/video-processor` → `https://lunexnynn.app.n8n.cloud/webhook/video-processor`
+- **Proxy genérico**: `POST /api/n8n/webhook` (forward simples)
+- App mobile: `services/videoApi.ts` (`schedulePostsBatch`), `context/AppContext.tsx` (lista local de vídeos via AsyncStorage), tela `app/create-video.tsx`, lista em `app/(tabs)/bots.tsx`.
+
+## Build APK / EAS
+
+- `eas.json` configurado nos perfis `development`, `preview` (APK interno), `production` (AAB)
+- `EXPO_PUBLIC_DOMAIN=panel--replitconta001.replit.app` em todos os perfis (URL da API em produção)
+
+## Google OAuth
+
+- Backend: `auth.ts` em `/api/auth/google/{start,callback,poll/:state}`
+- Em produção usa `req.host` (ou env `GOOGLE_REDIRECT_URI` se setado)
+- Requer envs: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- URI de redirect a registrar no Google Cloud Console: `https://panel--replitconta001.replit.app/api/auth/google/callback`
+
+## Stack
+
+- **Monorepo tool**: pnpm workspaces
+- **Node.js version**: 24
+- **Package manager**: pnpm
+- **TypeScript version**: 5.9
+- **API framework**: Express 5
+- **Database**: PostgreSQL + Drizzle ORM
+- **Validation**: Zod (`zod/v4`), `drizzle-zod`
+- **API client**: Orval (gerado de OpenAPI spec)
+- **Frontend**: React + Vite, Tailwind CSS, Framer Motion, Wouter (shadcn/ui existente mas NÃO usado nas páginas — design Pterodactyl manual)
+- **Auth**: JWT (`jsonwebtoken` + `bcryptjs`), token em `localStorage` como `bot_token`
+- **Build**: esbuild (CJS bundle)
+- **Image processing**: sharp (WebP conversion for stickers)
+
+## Artifacts
+
+- `artifacts/api-server` — API REST (Express), porta via `$PORT`
+- `artifacts/bot-aluguel-pro` — Frontend React (Vite), previewPath `/`
+
+## Key Commands
+
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/api-server run dev` — run API server locally
+
+## Features Implementadas
+
+- Landing page completa e animada (hero com contadores, features, como funciona em 3 passos, planos/precos, depoimentos, FAQ acordeao, CTA final, footer completo com links) em PT-BR
+- Auth: cadastro/login via telefone + senha, JWT, 30 moedas boas-vindas
+- Dashboard: stats animados com contadores (moedas, bots, plano ativo, mensagens), cards de atalho rapido, atividade recente com animacao de entrada
+  - **Mobile**: bottom navigation bar fixa (5 itens: Hub, Bots, Moedas, Planos, Config), header compacto, safe-area pra iPhones
+- Bots: listar, criar, deletar, gerenciar (QR Code / codigo de 8 digitos)
+- Builder Visual: editor drag-and-drop de no-code com blocos (Comando, Acao, Condicao, Resposta)
+  - **85+ tipos de acao** implementados no backend: menus (show_menu_photo/admin/games/owner), 12 jogos (moeda, dado, sorteio, amor, ship, nota, sorte, V/D, roleta, top5, rank, piada), moderacao completa (kick, ban, warn, reset_warns, promover, rebaixar, mutar, desmutar, apagar), grupo (fechar, abrir, info, link, revogar, nome, desc, membros, admins, entrar via link, sair), dono (ligar, desligar, moedas, broadcast, bloquear, desbloquear), boas-vindas/despedida, enquete, CEP, calculadora, figurinha, hidetag, reagir, imagem, **novas acoes**: simular digitando, aguardar (delay), marcar como lido, adicionar/remover/definir moedas, entrar no grupo via link, sair do grupo, enviar log (debug), requisicao HTTP (webhook)
+  - **16 variaveis** substituidas no backend: {nome}, {numero}, {user}, {grupo}, {membros}, {admins}, {moedas}, {plano}, {prefix}, {bot}, {data}, {hora}, {dono}, {args}, {quoted}, {botname}
+  - **Permissoes de comando**: owner_only, admin_only, group_only, private_only aplicadas antes da execucao
+  - **Bloco Condicao**: bloco logico com DUAS saidas (SIM/NAO). 28 tipos de condicao (grupo/privado, admin, dono, bot admin, midia, texto, mencao, reply, citacao, flood, tamanho msg, membros, horario, prefixo, plano, bot ligado). Fios coloridos: verde (SIM) e vermelho (NAO). Tags de categoria no card. Backend avalia condicao e direciona fluxo. Template "Comando so no Privado" incluso.
+  - Campos condicionais: showWhen mostra campos extras conforme tipo selecionado
+  - Dicas contextuais para cada tipo de acao/condicao
+  - **Templates prontos**: 9 templates (Figurinha, Menu com Foto, Moderacao, Protecao Total, Sistema de Dono, Diversao, Ferramentas de Grupo, Mensagens Interativas, TUDO INCLUSO com 96+ blocos)
+  - **Botao Limpar Tudo**: remove todos os blocos do canvas com confirmacao
+  - **Drag from palette**: arrastar blocos da paleta direto pro canvas (mobile e desktop), ghost element durante drag
+  - **Pinch-to-zoom fix**: 2 dedos detectados via touchCount global — cancela drag de bloco automaticamente
+  - **Performance**: RAF throttle no handleMoveNode, will-change no container de transform e nodes
+  - **Gestos mobile**: 1 dedo = pan, pinça = zoom, long-press 200ms + arrastar = mover bloco, feedback visual (outline laranja + scale) e vibração
+  - **Bloco Resposta**: 6 tipos (texto, lista interativa, imagem, audio, localizacao, contato), variaveis ({nome}, {moedas}, etc.), botoes (max 3, reply/call), preview ao vivo no formulario, tags no card (tipo, botoes, preview)
+  - **Bloco Botoes**: bloco separado para botoes interativos (3 tipos: normal max 3, lista interativa/menu, ligar). Conecta-se na saida de um bloco Resposta para decorar a mensagem. Preview ao vivo no formulario. Backend mescla botoes na mensagem da resposta. Cliques de botoes/listas parseados via buttonsResponseMessage/listResponseMessage.
+  - Formato secoes lista: linhas sem pipe = titulo secao, linhas com pipe = id | titulo_row | descricao
+- WhatsApp: auto-reconnect de sessoes ao iniciar servidor (restoreSessions), sessoes persistentes em `.baileys-sessions/`
+- Planos: Basico (100), Pro (250), Premium (500) moedas/30 dias
+- Pagamentos: recarga PIX com codigo copia-e-cola, historico
+- Admin: stats da plataforma, tabela de usuarios e pagamentos, nomes de usuarios nos pagamentos
+- **Hosted Bots Page** (`/dashboard/hosted`): criar, iniciar, parar, reiniciar e excluir bots hospedados via hooks gerados
+- **Profile Page** (`/dashboard/profile`): visualizar/editar nome e telefone, excluir conta com confirmacao dupla
+- **Rate Limiting**: global 100/min, auth 5/min, SMS 3/hr, criacao 10/hr via express-rate-limit
+- **Webhook PIX Auth**: token Bearer via `WEBHOOK_PIX_TOKEN` env var
+- **Atomic Payments**: transacoes DB atomicas (drizzle transaction) para creditar moedas + atualizar status
+- **CORS Hardening**: origens restritas via `CORS_ORIGINS` env var (comma-separated)
+- **JWT Secret**: SERVER_SECRET obrigatorio (fatal error se nao definido)
+- **WhatsApp Reconnect**: exponential backoff (2s, 4s, 8s... max 2min), reset no connect
+- **Variaveis {moedas}/{plano}**: lidas do banco (owner real coins/plan) em vez de hardcoded
+- **Busca Dashboard**: campo de busca funcional filtra bots por nome
+- **Settings hooks**: usa useUpdateBotSettings em vez de fetch manual
+- **Web — Tema Pterodactyl**: fundo muito escuro (#090A0F), roxo primário (#7C3AED), accent indigo (#6D28D9). Sem shadcn nos pages — HTML raw com Tailwind. CSS variables em `index.css` — `--primary: 263 84% 57%`, `--accent: 263 70% 50%`. Dashboard redesenhado: wave header SVG, feature cards (Criar Bot/Construtor/Moedas/Planos), lista "SEUS BOTS" com status, painel lateral com stats e pré-visualização de comandos.
+- **Mobile — Tema HubPlatform Dark**: fundo `#0F0F14`, cards `#1A1A24` com `borderWidth: 1, borderColor: #2A2A35`, inputs `#1E1E28`, texto primário `#F0F0F5`, secundário `#A0A0B0`, accent `#A78BFA`. **Todas as telas usam headers flat dark** (sem LinearGradient) com borda inferior sutil. **Dashboard HubPlatform** (`index.tsx`): header com ícone terminal + PRO badge + avatar, card "Criar Novo Bot" com seletor de plataforma (WhatsApp/Discord/Telegram com cores nativas), stats overview (Bots Ativos + Msgs Hoje), bot cards com top glow colorido por plataforma + badges + botão Builder, plan usage meter com barras de progresso. **BottomNav** (`components/BottomNav.tsx`): barra semi-transparente, ícones + labels (Hub/Bots/Moedas/Planos/Config), floating purple FAB "+" central (marginTop -28, shadow roxo). Tabs: Hub (grid), Bots (cpu), Moedas (credit-card), Planos (star), Config (settings). **Bots** (`bots.tsx`): header flat dark, bot cards com top glow, badges de status com border, ações Builder/Gerenciar/Deletar. **Settings** (`settings.tsx`): profile card com avatar roxo + plan badge, seções CONTA/NAVEGAÇÃO/SESSÃO (sem tutorial/tour). **Plans** (`plans.tsx`): coins card, plan cards com features. **Payments** (`payments.tsx`): PIX card, presets, histórico. **Admin** (`admin.tsx`): stats grid, tabs Users/Payments. **Bot detail/settings**: nav flat dark com botões back/settings arredondados, cards com bordas. **Builder** (`builder/[id].tsx`): n8n-style canvas INTOCADO — infinite scroll, SVG edges, GestureDetector, Reanimated. QR code box mantém fundo branco.
+- **Sem TourOverlay interativo**: TourContext/TourOverlay e botão "Iniciar Tutorial" nos settings foram removidos; onboarding é feito via `app/onboarding.tsx` (slides)
+- **Cores consistentes**: primary `#6D28D9`, darker `#4C1D95`, deepest `#3B0764`, accent `#8B5CF6`. Status: online `#22C55E`, warning `#F59E0B`, error `#EF4444`, offline `#9CA3AF`
+- **Onboarding (Mobile)**:
+  - `app/onboarding.tsx` — 4 slides horizontally paginated (FlatList + pagingEnabled): Bem-vindo / Builder Visual / Conexão WhatsApp / Vamos Começar
+  - Exibido apenas uma vez (AsyncStorage key `ONBOARDING_SEEN`); pode ser pulado a qualquer momento
+  - Após registro → sempre vai para onboarding; após login → vai para onboarding se flag não estiver definida
+  - Dashboard: card "Crie seu primeiro bot" exibido quando bots.length === 0 e onboarding já foi visto
+  - Builder: dica de primeiro uso (overlay card) exibida uma vez (AsyncStorage key `BUILDER_HINT_SEEN`)
+- **Store Readiness (Mobile)**:
+  - Política de Privacidade + Termos de Uso (`app/legal/privacy.tsx`, `app/legal/terms.tsx`)
+  - Excluir conta com confirmação dupla (Zona de Perigo no settings)
+  - Edição de perfil (`app/edit-profile.tsx`) com nome/telefone
+  - Recuperação de senha (`app/(auth)/forgot-password.tsx`) com link no login
+  - Animações de transição: slide_from_right (default), fade (auth/tabs), slide_from_bottom (builder)
+  - Deep links: scheme `botaluguel`, iOS `bundleIdentifier` + Android `package` = `com.botaluguel.pro`
+  - Accessibility labels em elementos interativos (dashboard, bots, settings, bottom nav)
+  - In-app review (`expo-store-review`) após criação do primeiro bot
+  - Loading/error/empty states: `StateViews.tsx` reusável, error states no dashboard e bots
+  - Backend: `DELETE /auth/account`, `PATCH /auth/profile`, `POST /auth/reset-password`
+
+## Admin Credentials
+
+- Telefone: `11999990000`, Senha: `admin123`
+
+## Notas Importantes
+
+- PIX: EFI Bank real — Client ID/Secret em env vars, certificado .p12 em `artifacts/api-server/certs/efi.p12` (gitignored), caminho via `EFI_CERT_PATH`. Chave PIX = chave aleatória EVP `a45331e2-840e-41dc-bc93-8f1bd2b6fd91` (a email `studiopecc@email.com` não está cadastrada no BACEN para essa conta EFI). `EFI_PIX_KEY` setada corretamente.
+- SMS (reset de senha): gateway Zenvia (`lib/sms.ts`). Var: `SMS_API_KEY` (secret Replit). Sem a chave, o código é apenas logado no servidor (modo mock — ok para dev). `SMS_SENDER_ID` (env, default `BotAluguel`) controla o nome do remetente. Código de 6 dígitos, expira em 10 min. Se o SMS falhar, o código é descartado e o cliente recebe HTTP 503. Documentado em `artifacts/api-server/.env.example`.
+- Google OAuth: `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` configurados em env vars
+- Sticker: imagens convertidas para WebP 512x512 via sharp; video nao suportado
+- Sessoes WhatsApp: salvas em `artifacts/api-server/.baileys-sessions/` (gitignored)
+- 1 BRL = 100 moedas
+- Planos hardcoded em `artifacts/api-server/src/routes/plans.ts`
+
+See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
