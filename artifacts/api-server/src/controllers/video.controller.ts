@@ -15,14 +15,14 @@ const jobStore = new Map<string, JobEntry>();
 
 export async function processVideo(req: Request, res: Response): Promise<void> {
   const body = req.body as {
-    posts?: Array<{ videoUrl?: string; time?: string; platforms?: string[] }>;
+    posts?: Array<{ videoUrl?: string; time?: string; platforms?: string[]; title?: string }>;
   };
   if (!body.posts || !Array.isArray(body.posts) || body.posts.length === 0) {
     res.status(400).json({ error: "Campo 'posts' deve ser um array não vazio." });
     return;
   }
   const allowed = ["instagram", "tiktok", "youtube"];
-  const validPosts: Array<{ videoUrl: string; time: string; platforms: string[] }> = [];
+  const validPosts: Array<{ videoUrl: string; time: string; platforms: string[]; title?: string }> = [];
   for (const p of body.posts) {
     if (!p.videoUrl?.trim()) continue;
     if (!p.platforms?.length) continue;
@@ -31,6 +31,7 @@ export async function processVideo(req: Request, res: Response): Promise<void> {
       videoUrl: p.videoUrl.trim(),
       time: p.time ?? new Date().toISOString(),
       platforms: p.platforms,
+      ...(p.title?.trim() ? { title: p.title.trim() } : {}),
     });
   }
   if (validPosts.length === 0) {

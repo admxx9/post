@@ -32,10 +32,28 @@ const STATUS_CFG: Record<string, { color: string; label: string; icon: string }>
 
 function VideoCard({ post, onDelete }: { post: VideoPost; onDelete: (id: string) => void }) {
   const st = STATUS_CFG[post.status] ?? STATUS_CFG.pending;
-  const dateStr = useMemo(() => {
+  const isScheduled = post.status === "scheduled";
+
+  const scheduledFmt = useMemo(() => {
     try {
       const d = new Date(post.scheduledTime ?? post.timestamp);
-      return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const date = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+      const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      return { date, time };
+    } catch {
+      return { date: "", time: "" };
+    }
+  }, [post]);
+
+  const compactDate = useMemo(() => {
+    try {
+      const d = new Date(post.scheduledTime ?? post.timestamp);
+      return d.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     } catch {
       return "";
     }
@@ -46,19 +64,25 @@ function VideoCard({ post, onDelete }: { post: VideoPost; onDelete: (id: string)
   return (
     <View style={card.wrap}>
       <View style={card.inner}>
-        <View style={card.iconCircle}>
-          <Feather name="video" size={22} color="#A78BFA" />
+        <View style={[card.iconCircle, isScheduled && card.iconCircleScheduled]}>
+          <Feather
+            name={isScheduled ? "clock" : "video"}
+            size={22}
+            color={isScheduled ? "#A78BFA" : "#A78BFA"}
+          />
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={card.name} numberOfLines={1}>{post.title?.trim() || "Vídeo enviado"}</Text>
+          <Text style={card.name} numberOfLines={1}>
+            {post.title?.trim() || "Vídeo enviado"}
+          </Text>
           <Text style={card.url} numberOfLines={1}>{shortUrl}</Text>
           <View style={card.metaRow}>
-            <View style={[card.statusPill, { borderColor: st.color + "40" }]}>
+            <View style={[card.statusPill, { borderColor: st.color + "40", backgroundColor: st.color + "12" }]}>
               <Feather name={st.icon as any} size={9} color={st.color} />
               <Text style={[card.statusText, { color: st.color }]}>{st.label}</Text>
             </View>
-            <Text style={card.detail}>· {dateStr}</Text>
+            {!isScheduled && <Text style={card.detail}>· {compactDate}</Text>}
           </View>
         </View>
 
@@ -72,6 +96,22 @@ function VideoCard({ post, onDelete }: { post: VideoPost; onDelete: (id: string)
           <Feather name="external-link" size={16} color="#8E8E9E" />
         </Pressable>
       </View>
+
+      {isScheduled && (
+        <View style={card.scheduleBlock}>
+          <View style={card.schedItem}>
+            <Feather name="calendar" size={12} color="#A78BFA" />
+            <Text style={card.schedLabel}>Data</Text>
+            <Text style={card.schedValue}>{scheduledFmt.date}</Text>
+          </View>
+          <View style={card.schedDivider} />
+          <View style={card.schedItem}>
+            <Feather name="clock" size={12} color="#A78BFA" />
+            <Text style={card.schedLabel}>Horário</Text>
+            <Text style={card.schedValue}>{scheduledFmt.time}</Text>
+          </View>
+        </View>
+      )}
 
       <View style={card.platformRow}>
         {post.platforms.map((p) => {
@@ -314,6 +354,43 @@ const card = StyleSheet.create({
     borderColor: "#6D28D940",
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconCircleScheduled: {
+    backgroundColor: "#A78BFA20",
+    borderColor: "#A78BFA60",
+  },
+  scheduleBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0A0A10",
+    marginHorizontal: 14,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#A78BFA25",
+    paddingVertical: 10,
+  },
+  schedItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 3,
+  },
+  schedLabel: {
+    fontSize: 9,
+    color: "#5A5A6B",
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  schedValue: {
+    fontSize: 14,
+    color: "#EBEBF2",
+    fontFamily: "Inter_700Bold",
+  },
+  schedDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "#1F1F2A",
   },
   name: { fontSize: 14, color: "#EBEBF2", fontFamily: "Inter_600SemiBold" },
   url: { fontSize: 11, color: "#6B7280", fontFamily: "Inter_400Regular", marginTop: 2 },

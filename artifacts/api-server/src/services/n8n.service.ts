@@ -4,6 +4,7 @@ export interface ScheduledPost {
   videoUrl: string;
   time: string;
   platforms: string[];
+  title?: string;
 }
 
 export interface BatchPayload {
